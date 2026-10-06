@@ -11,13 +11,10 @@ export const DEFAULT_GEMINI_KEY = (typeof import.meta !== 'undefined' && import.
 export async function generateAITimetable(appData, options = {}) {
   const apiKey = options.apiKey || DEFAULT_GEMINI_KEY;
   if (!apiKey) {
-    console.log('[ClassMate AI] No Gemini API key provided, generating timetable using verified rule engine.');
     return buildLocalTimetable(appData, options);
   }
   const preferredClass = options.preferredClass || options.className || appData.classes?.[0]?.name || 'S1 MCA';
   const targetClass = (appData.classes || []).find((c) => c.name === preferredClass) || appData.classes?.[0];
-
-  console.log(`[ClassMate AI] Requesting Gemini AI timetable for: ${preferredClass}`);
 
   const systemPrompt = `You are an expert academic timetable scheduling AI.
 Your task is to generate a complete, 100% conflict-free weekly timetable for the class "${preferredClass}".
@@ -62,37 +59,36 @@ Each session object must have:
     let json = null;
     let lastError = null;
 
-  for (const modelName of modelsToTry) {
-    try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: systemPrompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: 'application/json'
-          }
-        })
-      });
+    for (const modelName of modelsToTry) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: systemPrompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json'
+            }
+          })
+        });
 
-      if (response.ok) {
-        json = await response.json();
-        console.log(`[ClassMate AI] Successfully received response from model: ${modelName}`);
-        break;
-      } else {
-        const errText = await response.text();
-        lastError = new Error(`Model ${modelName} returned HTTP ${response.status}: ${errText.slice(0, 80)}`);
+        if (response.ok) {
+          json = await response.json();
+          break;
+        } else {
+          const errText = await response.text();
+          lastError = new Error(`Model ${modelName} returned HTTP ${response.status}: ${errText.slice(0, 80)}`);
+        }
+      } catch (e) {
+        lastError = e;
       }
-    } catch (e) {
-      lastError = e;
     }
-  }
 
-  if (!json) {
-    throw lastError || new Error('All Gemini model endpoints failed.');
-  }
+    if (!json) {
+      throw lastError || new Error('All Gemini model endpoints failed.');
+    }
     const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawContent) {
@@ -103,8 +99,6 @@ Each session object must have:
     if (!Array.isArray(parsedSessions) || parsedSessions.length === 0) {
       throw new Error('Gemini AI returned an empty timetable list.');
     }
-
-    console.log(`[ClassMate AI] Gemini returned ${parsedSessions.length} sessions. Normalizing...`);
 
     const entries = parsedSessions.map((session, index) => {
       const start = session.startTime || session.start || '09:00';
@@ -136,14 +130,11 @@ Each session object must have:
     let finalEntries = entries;
 
     if (!validation.valid && validation.hardConflicts.length > 0) {
-      console.warn(`[ClassMate AI] AI output has ${validation.hardConflicts.length} conflict(s). Running automated repair...`);
       const repairResult = repairTimetable(entries, appData);
       if (repairResult.success) {
         finalEntries = repairResult.repairedEntries;
         validation = detectConflicts(finalEntries, appData);
-        console.log('[ClassMate AI] Automated repair successfully cleared conflicts!');
       } else {
-        console.warn('[ClassMate AI] Conflict repair incomplete, switching to verified constraint engine.');
         return buildLocalTimetable(appData, options);
       }
     }
@@ -163,7 +154,6 @@ Each session object must have:
       }
     };
   } catch (error) {
-    console.warn('[ClassMate AI] Gemini AI scheduling encountered an error, using verified scheduler fallback:', error.message);
     const localResult = buildLocalTimetable(appData, options);
     return {
       ...localResult,

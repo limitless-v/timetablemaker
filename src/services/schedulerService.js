@@ -393,7 +393,6 @@ function getSoftScore(entry, appData, option = {}) {
 }
 
 export function generateTimetable(appData, options = {}) {
-  console.log('[ClassMate Scheduler] Starting timetable generation with options:', options);
   const data = normalizeAppData(appData);
   const targetClasses = (data.classes || []).filter((classItem) => {
     if (options.classId && String(classItem.id) !== String(options.classId)) return false;
@@ -411,7 +410,6 @@ export function generateTimetable(appData, options = {}) {
     try {
       const sourceSessions = generateSourceTimetable(selectedClassName);
       if (Array.isArray(sourceSessions) && sourceSessions.length > 0) {
-        console.log(`[ClassMate Scheduler] Using verified master schedule for ${selectedClassName}: ${sourceSessions.length} sessions`);
         const mappedEntries = sourceSessions.map((session, idx) => ({
           id: `gen-${selectedClassName}-${idx + 1}`,
           classId: targetClasses[0]?.id || selectedClassName,
@@ -450,16 +448,13 @@ export function generateTimetable(appData, options = {}) {
         };
       }
     } catch (err) {
-      console.log(`[ClassMate Scheduler] Info: No pre-built schedule for ${selectedClassName}, proceeding with solver.`);
+      // Proceed with solver
     }
   }
-
-  console.log('[ClassMate Scheduler] Target classes:', targetClasses.map((c) => c.name));
 
   const requiredSessions = [];
   targetClasses.forEach((classItem) => {
     const classSubjects = (data.subjects || []).filter((subject) => isSubjectForClass(subject, classItem));
-    console.log(`[ClassMate Scheduler] Class ${classItem.name} matched ${classSubjects.length} subjects`);
 
     classSubjects.forEach((subject) => {
       const weeklyRequired = Number(subject.weeklyPeriods || 1);
@@ -481,10 +476,7 @@ export function generateTimetable(appData, options = {}) {
     });
   });
 
-  console.log(`[ClassMate Scheduler] Total required sessions to schedule: ${requiredSessions.length}`);
-
   if (requiredSessions.length === 0) {
-    console.warn('[ClassMate Scheduler] No sessions found to schedule.');
     return {
       success: false,
       entries: [],
@@ -508,7 +500,6 @@ export function generateTimetable(appData, options = {}) {
   const search = (index, partialEntries) => {
     steps += 1;
     if (steps > maxSteps || (Date.now() - startTime) > maxDurationMs) {
-      console.warn(`[ClassMate Scheduler] Search limit reached (steps: ${steps}, duration: ${Date.now() - startTime}ms)`);
       return null;
     }
 
@@ -582,7 +573,6 @@ export function generateTimetable(appData, options = {}) {
   };
 
   const scheduled = search(0, []);
-  console.log(`[ClassMate Scheduler] Search completed in ${Date.now() - startTime}ms (${steps} steps). Result:`, scheduled ? `${scheduled.length} sessions placed` : 'Failed to find combination');
 
   if (!scheduled) {
     return {
@@ -601,7 +591,6 @@ export function generateTimetable(appData, options = {}) {
   }
 
   const validation = detectConflicts(scheduled, data);
-  console.log('[ClassMate Scheduler] Final conflict check:', validation);
 
   if (!validation.valid) {
     return {

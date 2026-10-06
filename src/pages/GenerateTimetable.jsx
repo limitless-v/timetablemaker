@@ -56,17 +56,9 @@ function GenerateTimetable() {
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(appState.generatedTimetable || []);
   const [generationError, setGenerationError] = useState('');
-  const [logs, setLogs] = useState([]);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'timeline' | 'table'
   const [toast, setToast] = useState(null);
   const [activeEventDetail, setActiveEventDetail] = useState(null);
-
-  const addLog = (message) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const formatted = `[${timestamp}] ${message}`;
-    console.log(formatted);
-    setLogs((prev) => [...prev, formatted]);
-  };
 
   const handleClassChange = (newClassName) => {
     setClassName(newClassName);
@@ -198,36 +190,21 @@ function GenerateTimetable() {
     setLoading(true);
     setGenerated([]);
     setGenerationError('');
-    setLogs([]);
     setActiveEventDetail(null);
 
     const currentAppState = loadAppState();
-    const engineName = useAI ? 'Google Gemini AI (1.5 Flash)' : 'Constraint Optimizer';
-    addLog(`Initiating timetable generation for ${className} (${academicYear})...`);
-    addLog(`Engine: ${engineName}`);
-    addLog(`Configuration: Department = "${department}", Program = "${program}", Semester = "${semester}"`);
-    console.log('[ClassMate] Current app data:', currentAppState);
-
     await new Promise((resolve) => setTimeout(resolve, 60));
 
     try {
       let result;
       if (useAI) {
-        addLog('Connecting to Google Gemini AI endpoint...');
-        addLog('Sending academic curriculum, faculty availability, and room capacity constraints to Gemini...');
         result = await generateAITimetable(currentAppState, {
           department,
           program,
           semester,
           preferredClass: className
         });
-        if (result.aiGenerated) {
-          addLog('Gemini AI successfully returned optimized conflict-free schedule matrix.');
-        } else if (result.fallbackUsed) {
-          addLog(`Note: ${result.aiError || 'Using local verified scheduler fallback'}.`);
-        }
       } else {
-        addLog('Extracting subject requirements and faculty availability...');
         result = generateTimetable(currentAppState, {
           department,
           program,
@@ -236,29 +213,21 @@ function GenerateTimetable() {
         });
       }
 
-      console.log('[ClassMate] Timetable Generation Result:', result);
-
       if (!result.success) {
-        addLog(`Generation unsuccessful: ${result.reason}`);
         setGenerationError(result.reason || 'Unable to generate a valid timetable.');
         setGenerated([]);
         return;
       }
 
       const finalEntries = result.entries;
-      addLog(`Allocated ${finalEntries.length} timetable sessions. Running final conflict validation...`);
-
       const finalValidation = detectConflicts(finalEntries, currentAppState);
-      console.log('[ClassMate] Conflict Validation Result:', finalValidation);
 
       if (!finalValidation.valid) {
-        addLog(`Validation alert: ${finalValidation.hardConflicts.length} hard conflicts detected.`);
         setGenerationError('GENERATION FAILED: hard conflicts remain after scheduling.');
         setGenerated(finalEntries);
         return;
       }
 
-      addLog(`Validation passed! 0 hard conflicts found. Quality Score: ${result.score || 100}%. Saving timetable...`);
       setGenerated(finalEntries);
       saveAppState({
         ...currentAppState,
@@ -272,11 +241,8 @@ function GenerateTimetable() {
           aiPowered: Boolean(useAI)
         }
       });
-      addLog('Timetable saved to app state.');
     } catch (error) {
-      console.error('[ClassMate] Generation Error:', error);
       const errMsg = error instanceof Error ? error.message : 'Unable to generate the timetable.';
-      addLog(`Error during execution: ${errMsg}`);
       setGenerationError(errMsg);
     } finally {
       setLoading(false);
@@ -355,15 +321,6 @@ function GenerateTimetable() {
               </div>
             )}
           </div>
-
-          {logs.length > 0 && (
-            <div className="mt-4 p-3 bg-dark text-light rounded font-monospace small" style={{ maxHeight: 180, overflowY: 'auto' }}>
-              <div className="fw-bold text-info mb-1">Execution Console Log:</div>
-              {logs.map((log, idx) => (
-                <div key={idx} className="py-0">{log}</div>
-              ))}
-            </div>
-          )}
 
           {generationError && !loading && <div className="mt-4 alert alert-danger">{generationError}</div>}
 
